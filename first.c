@@ -7,6 +7,16 @@
 
 #define e 2.718281828459
 
+struct bounds {
+    int dim;
+    int **P;
+    int lower_bound;
+    int upper_bound;
+    int div_low;
+    int div_upp;
+    double sum;
+};
+
 int calc(int dim, int P[dim][dim], int d, int *x, int **a){
     int s = 0;
     int i;
@@ -54,27 +64,29 @@ int rec(int dim, int P[dim][dim], double *sum, int d, int *x, int **a, int cur_s
     return 0;
 }
 
-double *helper(void *dimh, void *Ph, void *upper_boundh, void *lower_boundh, void *div_lowh, void *div_upph){
-    int dim = (int) dimh;
-    int P[dim][dim] = *Ph;
-    int upper_bound = (int) upper_bound;
-    int lower_bound = (int) lower_bound;
-    int div_low = (int) div_lowh;
-    int div_upp = (int) div_upph;
+double helper(void *st){
+    //int dim = (int) dimh;
+    //int P[dim][dim] = *Ph;
+    //int upper_bound = (int) upper_bound;
+    //int lower_bound = (int) lower_bound;
+    //int div_low = (int) div_lowh;
+    //int div_upp = (int) div_upph;
+    struct bounds *s = (struct bounds *) st;
+    printf("%d\n", s->dim);
 
-    double sum;
-    int x[dim];
-    int *a[dim-1]; //TODO: maybe make this 2
+    //double sum;
+    int x[s->dim];
+    int *a[s->dim-1]; //TODO: maybe make this 2
     int i;
     int j = 0;
-    for (i = dim - 1; i > 0; i--){
+    for (i = s->dim - 1; i > 0; i--){
         a[j] = malloc(sizeof(int) * i);
         j++;
     }
 
     pthread_detach(pthread_self());
-    rec(dim, P, &sum, 1, x, a, 0, lower_bound, upper_bound, div_low, div_upp);
-    return sum;
+    rec(s->dim, (s->P), &(s->sum), 1, x, a, 0, s->lower_bound, s->upper_bound, s->div_low, s->div_upp);
+    return s->sum;
 }
 
 int read_P(int dim, int P[dim][dim]){
@@ -124,14 +136,15 @@ int main(){
     int P[dim][dim];
     read_P(dim, P);
 
-    int x[dim];
-    int *a[dim - 1];
+    //int x[dim];
+    //int *a[dim - 1];
     
 
 
     int range = 4;
 
-    int cores = 4;
+    pthread_t threads[dim];
+    int cores = 2;
     int core;
     int per_core = range / cores;
     int lower_bound = -(range/2);
@@ -139,17 +152,38 @@ int main(){
     int start = lower_bound;
     double sums[cores];
 
-    for (core = 0; core < cores-1; core++){
-        sums[core] = helper((void*) dim, (void *)P, (void*) lower_bound, (void *) upper_bound, (void *) start, (void *) start+per_core);
+    struct bounds b[cores];
+
+
+    for (core = 0; core < cores; core++){
+        b[core].dim = dim;
+        b[core].P = &P;
+        b[core].lower_bound = lower_bound;
+        b[core].upper_bound = upper_bound;
+        b[core].div_low = start;
+
+        if (core == cores-1){
+            b[core].div_upp = upper_bound;
+        }
+        else {
+            b[core].div_upp = start + per_core;
+        }
+        
+        pthread_create(&threads[core], NULL, helper, &b[core]);
         start += per_core;
     }
-    //helper(dim, P, &sums[cores-1], 1, x, a, 0, lower_bound, upper_bound, start, upper_bound);
 
-    int i;
+    //helper(dim, P, &sums[cores-1], 1, x, a, 0, lower_bound, upper_bound, start, upper_bound);
+    puts("hello");
+
     double sum;
-    for (i = 0; i < cores; i++){
-        sum += sums[i];
+
+    for (core = 0; core < cores; core++){
+        puts("sup");
+        pthread_join(threads[core], NULL);
+        sum += b[core].sum;
     }
+    puts("hi");
 
     printf("%14.14f\n", sum);
 
